@@ -2434,7 +2434,10 @@ def analyze_callers(
     db_manager, graph_builder, code_finder = services[:3]
     
     try:
-        results = code_finder.who_calls_function(function, file)
+        from codegraphcontext.utils.tool_limits import get_tool_result_limit
+        results = code_finder.who_calls_function(
+            function, file, limit=get_tool_result_limit("find_callers") or 20
+        )
         
         if not results:
             console.print(f"[yellow]No callers found for '{function}'[/yellow]")
