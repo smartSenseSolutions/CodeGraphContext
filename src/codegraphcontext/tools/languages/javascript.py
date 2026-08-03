@@ -143,7 +143,11 @@ class JavascriptTreeSitterParser:
                     elif curr.parent and curr.parent.type == 'pair': # property: function
                         name_node = curr.parent.child_by_field_name('key')
                 
-                return self._get_node_text(name_node) if name_node else None, curr.type, curr.start_point[0] + 1
+                if name_node:
+                    return self._get_node_text(name_node), curr.type, curr.start_point[0] + 1
+                # Anonymous callback (a bare arg to setTimeout/.then/app.use/…) has no name of
+                # its own — do not stop here and drop the caller; keep walking up to the nearest
+                # NAMED enclosing function so the call is attributed to it, else the CALLS edge is lost.
             curr = curr.parent
         return None, None, None
 
