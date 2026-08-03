@@ -6,6 +6,8 @@ from collections import Counter
 from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING
 from pathlib import Path
 
+from ..utils.tool_limits import get_tool_result_limit
+
 if TYPE_CHECKING:
     from ..core.database import DatabaseManager
 from ..utils.path_ignore import cypher_path_not_under_ignore_dirs
@@ -542,7 +544,7 @@ class CodeFinder:
                 result = session.run(query, decorator_name=decorator_name, repo_path=repo_path)
             return result.data()
     
-    def who_calls_function(self, function_name: str, path: Optional[str] = None, repo_path: Optional[str] = None) -> List[Dict]:
+    def who_calls_function(self, function_name: str, path: Optional[str] = None, repo_path: Optional[str] = None, limit: int = 20) -> List[Dict]:
         """Find what functions call a specific function using CALLS relationships with improved matching"""
         with self.driver.session() as session:
             repo_filter = "AND caller.path STARTS WITH $repo_path" if repo_path else ""
@@ -560,8 +562,8 @@ class CodeFinder:
                         caller.is_dependency as caller_is_dependency,
                         target.path as target_file_path
                 ORDER BY caller_is_dependency ASC, caller_file_path, caller_line_number
-                    LIMIT 20
-                """, function_name=function_name, path=path, repo_path=repo_path)
+                    LIMIT $limit
+                """, function_name=function_name, path=path, repo_path=repo_path, limit=limit)
                 
                 results = result.data()
                 if not results:
@@ -578,8 +580,8 @@ class CodeFinder:
                             caller.is_dependency as caller_is_dependency,
                             target.path as target_file_path
                     ORDER BY caller_is_dependency ASC, caller_file_path, caller_line_number
-                        LIMIT 20
-                    """, function_name=function_name, repo_path=repo_path)
+                        LIMIT $limit
+                    """, function_name=function_name, repo_path=repo_path, limit=limit)
                     results = result.data()
             else:
                 result = session.run(f"""
@@ -595,8 +597,8 @@ class CodeFinder:
                         caller.is_dependency as caller_is_dependency,
                         target.path as target_file_path
                 ORDER BY caller_is_dependency ASC, caller_file_path, caller_line_number
-                    LIMIT 20
-                """, function_name=function_name, repo_path=repo_path)
+                    LIMIT $limit
+                """, function_name=function_name, repo_path=repo_path, limit=limit)
                 results = result.data()
             
             return results
@@ -1210,7 +1212,10 @@ class CodeFinder:
         
         try:
             if query_type == "find_callers":
-                results = self.who_calls_function(target, context, repo_path=repo_path)
+                results = self.who_calls_function(
+                    target, context, repo_path=repo_path,
+                    limit=get_tool_result_limit("find_callers") or 20,
+                )
                 # Hoist target_file_path (constant across rows) to the envelope once,
                 # instead of repeating the absolute path in every row (payload slimming).
                 target_file_path = next((r.pop("target_file_path", None) for r in results), None) if results else None
