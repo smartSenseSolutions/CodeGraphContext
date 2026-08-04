@@ -646,7 +646,7 @@ class CodeFinder:
             
             return result.data()
     
-    def who_imports_module(self, module_name: str, repo_path: Optional[str] = None) -> List[Dict]:
+    def who_imports_module(self, module_name: str, repo_path: Optional[str] = None, limit: int = 20) -> List[Dict]:
         """Find what files import a specific module using IMPORTS relationships"""
         with self.driver.session() as session:
             repo_filter = "AND file.path STARTS WITH $repo_path" if repo_path else ""
@@ -667,9 +667,9 @@ class CodeFinder:
                     repo.name AS repository_name,
                     imports
                 ORDER BY file_is_dependency ASC, path
-                LIMIT 20
-            """, module_name=module_name, repo_path=repo_path)
-            
+                LIMIT $limit
+            """, module_name=module_name, repo_path=repo_path, limit=limit)
+
             return result.data()
     
     def who_modifies_variable(self, variable_name: str, repo_path: Optional[str] = None) -> List[Dict]:
@@ -1238,7 +1238,10 @@ class CodeFinder:
                 }
                 
             elif query_type == "find_importers":
-                results = self.who_imports_module(target, repo_path=repo_path)
+                results = self.who_imports_module(
+                    target, repo_path=repo_path,
+                    limit=get_tool_result_limit("find_importers") or 20,
+                )
                 return {
                     "query_type": "find_importers", "target": target, "results": results,
                     "summary": f"Found {len(results)} files that import '{target}'"
