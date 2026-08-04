@@ -138,3 +138,49 @@ function main() {
     imports_map = pre_scan_javascript([f], wrapper)
 
     assert "helper" in imports_map or "main" in imports_map
+
+def _js_context_for(result, call_name):
+    calls = [c for c in result["function_calls"] if c["name"] == call_name]
+    assert calls, f"call {call_name!r} not found in {[c['name'] for c in result['function_calls']]}"
+    return calls[0]["context"]
+
+
+def test_call_inside_anonymous_callback_is_attributed_to_named_function(js_parser, temp_test_dir):
+    """Regression test for #1570 (JavaScript side)."""
+    code = """const requestTimeout = (req, res, next) => {
+    setTimeout(() => {
+        customErrorHandler(req, res);
+    }, 1000);
+};
+
+function customErrorHandler() {}
+"""
+    f = temp_test_dir / "callback.js"
+    f.write_text(code)
+
+    result = js_parser.parse(f)
+
+    name, _, line = _js_context_for(result, "customErrorHandler")
+    assert name == "requestTimeout"
+    assert line == 1
+
+
+def test_class_property_arrow_is_a_function_and_owns_its_calls(js_parser, temp_test_dir):
+    code = """class Svc {
+    handler = () => { helper(); };
+    boot = function () { helper(); };
+}
+
+function helper() {}
+"""
+    f = temp_test_dir / "class_field.js"
+    f.write_text(code)
+
+    result = js_parser.parse(f)
+
+    fns = {fn["name"]: fn for fn in result["functions"]}
+    assert fns["handler"]["line_number"] == 2
+    assert fns["handler"]["class_context"] == "Svc"
+
+    contexts = [c["context"][0] for c in result["function_calls"] if c["name"] == "helper"]
+    assert contexts == ["handler", "boot"]

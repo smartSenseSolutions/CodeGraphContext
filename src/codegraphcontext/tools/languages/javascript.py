@@ -86,6 +86,20 @@ JS_QUERIES = {
                 parameters: (formal_parameters) @params
             ) @function_node
         )
+
+        (field_definition
+            property: (property_identifier) @name
+            value: (arrow_function
+                parameters: (formal_parameters) @params
+            ) @function_node
+        )
+
+        (field_definition
+            property: (property_identifier) @name
+            value: (function_expression
+                parameters: (formal_parameters) @params
+            ) @function_node
+        )
     """,
     "classes": """
         (class_declaration) @class
@@ -142,8 +156,12 @@ class JavascriptTreeSitterParser:
                         name_node = curr.parent.child_by_field_name('left')
                     elif curr.parent and curr.parent.type == 'pair': # property: function
                         name_node = curr.parent.child_by_field_name('key')
-                
-                return self._get_node_text(name_node) if name_node else None, curr.type, curr.start_point[0] + 1
+                    elif curr.parent and curr.parent.type == 'field_definition': # class property: function
+                        name_node = curr.parent.child_by_field_name('property')
+
+                if name_node:
+                    return self._get_node_text(name_node), curr.type, curr.start_point[0] + 1
+                # anonymous callback: keep walking to the nearest named enclosing function
             curr = curr.parent
         return None, None, None
 
@@ -223,7 +241,7 @@ class JavascriptTreeSitterParser:
             while current:
                 if current.type in ('function_declaration', 'function', 'arrow_function', 'method_definition', 'function_expression'):
                     return current
-                elif current.type in ('variable_declarator', 'assignment_expression'):
+                elif current.type in ('variable_declarator', 'assignment_expression', 'field_definition'):
                     for child in current.children:
                         if child.type in ('function', 'arrow_function', 'function_expression'):
                             return child
