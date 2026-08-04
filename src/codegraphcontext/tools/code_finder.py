@@ -603,7 +603,7 @@ class CodeFinder:
             
             return results
     
-    def what_does_function_call(self, function_name: str, path: Optional[str] = None, repo_path: Optional[str] = None) -> List[Dict]:
+    def what_does_function_call(self, function_name: str, path: Optional[str] = None, repo_path: Optional[str] = None, limit: int = 20) -> List[Dict]:
         """Find what functions a specific function calls using CALLS relationships"""
         with self.driver.session() as session:
             if path:
@@ -624,8 +624,8 @@ class CodeFinder:
                         call.args as call_args,
                         call.full_call_name as full_call_name
                     ORDER BY called_is_dependency ASC, called_function
-                    LIMIT 20
-                """, function_name=function_name, absolute_file_path=absolute_file_path, repo_path=repo_path)
+                    LIMIT $limit
+                """, function_name=function_name, absolute_file_path=absolute_file_path, repo_path=repo_path, limit=limit)
             else:
                 result = session.run(f"""
                     MATCH (caller:Function {{name: $function_name}})-[call:CALLS|HEURISTIC_CALLS]->(called:Function)
@@ -641,8 +641,8 @@ class CodeFinder:
                         call.args as call_args,
                         call.full_call_name as full_call_name
                     ORDER BY called_is_dependency ASC, called_function
-                    LIMIT 20
-                """, function_name=function_name, repo_path=repo_path)
+                    LIMIT $limit
+                """, function_name=function_name, repo_path=repo_path, limit=limit)
             
             return result.data()
     
@@ -1228,7 +1228,10 @@ class CodeFinder:
                 }
             
             elif query_type == "find_callees":
-                results = self.what_does_function_call(target, context, repo_path=repo_path)
+                results = self.what_does_function_call(
+                    target, context, repo_path=repo_path,
+                    limit=get_tool_result_limit("find_callees") or 20,
+                )
                 return {
                     "query_type": "find_callees", "target": target, "context": context, "results": results,
                     "summary": f"Function '{target}' calls {len(results)} other functions"

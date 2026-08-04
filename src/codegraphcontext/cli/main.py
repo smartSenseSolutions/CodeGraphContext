@@ -2378,7 +2378,10 @@ def analyze_calls(
     db_manager, graph_builder, code_finder = services[:3]
     
     try:
-        results = code_finder.what_does_function_call(function, file)
+        from codegraphcontext.utils.tool_limits import get_tool_result_limit
+        results = code_finder.what_does_function_call(
+            function, file, limit=get_tool_result_limit("find_callees") or 20
+        )
         
         if not results:
             console.print(f"[yellow]No function calls found for '{function}'[/yellow]")
